@@ -23,13 +23,3 @@ export async function fetchSentimentDistribution() {
   }
   return response.json();
 }
-
-export async function triggerScrape() {
-  const response = await fetch(`${API_BASE_URL}/scrape/trigger`, {
-    method: "POST"
-  });
-  if (!response.ok) {
-    throw new Error("Failed to trigger scrape");
-  }
-  return response.json();
-}
