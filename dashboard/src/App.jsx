@@ -1,7 +1,35 @@
 import React, { useEffect, useState } from "react";
-import { fetchArticles, fetchWordFrequency, fetchSentimentDistribution } from "./api";
+import {
+  DASHBOARD_ARTICLE_LIMIT,
+  fetchArticles,
+  fetchSentimentDistribution
+} from "./api";
 import ArticleCard from "./components/ArticleCard";
 import ChartsPanel from "./components/ChartsPanel";
+
+function computeWordFrequency(articles, limit = 20) {
+  const frequency = new Map();
+  const wordPattern = /[\p{L}\p{N}]+(?:['\u2019][\p{L}\p{N}]+)*/gu;
+
+  for (const article of articles) {
+    const title = article.translatedTitle || article.title || "";
+    const tokens = title.toLowerCase().match(wordPattern) || [];
+
+    for (const token of tokens) {
+      frequency.set(token, (frequency.get(token) || 0) + 1);
+    }
+  }
+
+  return [...frequency.entries()]
+    .sort((a, b) => {
+      if (b[1] !== a[1]) {
+        return b[1] - a[1];
+      }
+      return a[0].localeCompare(b[0]);
+    })
+    .slice(0, limit)
+    .map(([word, count]) => ({ word, count }));
+}
 
 function App() {
   const [articles, setArticles] = useState([]);
@@ -13,13 +41,13 @@ function App() {
   useEffect(() => {
     async function loadDashboardData() {
       try {
-        const [articlesResponse, frequencyResponse, sentimentResponse] = await Promise.all([
-          fetchArticles(),
-          fetchWordFrequency(),
+        const [articlesResponse, sentimentResponse] = await Promise.all([
+          fetchArticles(DASHBOARD_ARTICLE_LIMIT),
           fetchSentimentDistribution()
         ]);
-        setArticles(articlesResponse.data || []);
-        setWordFrequency(frequencyResponse.data || []);
+        const nextArticles = articlesResponse.data || [];
+        setArticles(nextArticles);
+        setWordFrequency(computeWordFrequency(nextArticles));
         setSentimentDistribution(sentimentResponse.data || {});
       } catch (err) {
         setError(err.message || "Failed to load dashboard data");

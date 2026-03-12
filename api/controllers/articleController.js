@@ -2,6 +2,7 @@ const path = require("path");
 const mongoose = require("mongoose");
 const Article = require("../../database/articleModel");
 const { computeWordFrequency } = require("../../analysis/wordFrequency");
+const { ensureArticleTranslation, ensureArticleTranslations } = require("../../scraper/translate");
 
 function toApiImageUrl(req, imageValue) {
   if (!imageValue || typeof imageValue !== "string") {
@@ -33,7 +34,8 @@ function serializeArticle(req, articleDoc) {
 async function getArticles(req, res) {
   try {
     const limit = Number.parseInt(req.query.limit, 10) || 50;
-    const articles = await Article.find().sort({ scrapedAt: -1 }).limit(limit);
+    const articles = await Article.find().sort({ updatedAt: -1 }).limit(limit);
+    await ensureArticleTranslations(articles);
     const data = articles.map((article) => serializeArticle(req, article));
     res.json({ count: data.length, data });
   } catch (error) {
@@ -52,6 +54,8 @@ async function getArticleById(req, res) {
     if (!article) {
       return res.status(404).json({ error: "Article not found" });
     }
+
+    await ensureArticleTranslation(article);
 
     return res.json(serializeArticle(req, article));
   } catch (error) {
@@ -75,7 +79,7 @@ async function searchArticles(req, res) {
         { keywords: regex }
       ]
     })
-      .sort({ scrapedAt: -1 })
+      .sort({ updatedAt: -1 })
       .limit(100);
 
     const data = articles.map((article) => serializeArticle(req, article));
@@ -87,7 +91,9 @@ async function searchArticles(req, res) {
 
 async function getWordFrequency(req, res) {
   try {
-    const articles = await Article.find({}, { title: 1, translatedTitle: 1 });
+    const limit = Number.parseInt(req.query.limit, 10) || 50;
+    const articles = await Article.find().sort({ updatedAt: -1 }).limit(limit);
+    await ensureArticleTranslations(articles);
     const titles = articles.map((article) => article.translatedTitle || article.title);
     const frequency = computeWordFrequency(titles, 20);
 

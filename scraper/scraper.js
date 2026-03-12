@@ -9,6 +9,73 @@ const Article = require("../database/articleModel");
 const { analyzeSentiment } = require("../analysis/sentiment");
 const { extractKeywords } = require("../analysis/keywordExtraction");
 
+function isEnvEnabled(value) {
+  return typeof value === "string" && value.trim().toLowerCase() === "true";
+}
+
+function getBrowserStackCapabilitiesList() {
+  return [
+    {
+      browserName: "Chrome",
+      "bstack:options": {
+        os: "Windows",
+        osVersion: "10",
+        browserVersion: "latest",
+        buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
+        sessionName: "El Pais Scraper - Chrome Desktop",
+        userName: process.env.BROWSERSTACK_USERNAME,
+        accessKey: process.env.BROWSERSTACK_ACCESS_KEY
+      }
+    },
+    {
+      browserName: "Firefox",
+      "bstack:options": {
+        os: "Windows",
+        osVersion: "10",
+        browserVersion: "latest",
+        buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
+        sessionName: "El Pais Scraper - Firefox Desktop",
+        userName: process.env.BROWSERSTACK_USERNAME,
+        accessKey: process.env.BROWSERSTACK_ACCESS_KEY
+      }
+    },
+    {
+      browserName: "Safari",
+      "bstack:options": {
+        os: "OS X",
+        osVersion: "Ventura",
+        browserVersion: "latest",
+        buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
+        sessionName: "El Pais Scraper - Safari Desktop",
+        userName: process.env.BROWSERSTACK_USERNAME,
+        accessKey: process.env.BROWSERSTACK_ACCESS_KEY
+      }
+    },
+    {
+      deviceName: "iPhone 14",
+      browserName: "Safari",
+      "bstack:options": {
+        osVersion: "16",
+        buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
+        sessionName: "El Pais Scraper - Safari Mobile",
+        userName: process.env.BROWSERSTACK_USERNAME,
+        accessKey: process.env.BROWSERSTACK_ACCESS_KEY
+      }
+    },
+    {
+      deviceName: "Google Pixel 7",
+      browserName: "Chrome",
+      "bstack:options": {
+        osVersion: "13.0",
+        buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
+        sessionName: "El Pais Scraper - Chrome Mobile",
+        userName: process.env.BROWSERSTACK_USERNAME,
+        accessKey: process.env.BROWSERSTACK_ACCESS_KEY
+      }
+    }
+  ];
+}
+
 // Tries to click the cookie accept button. El País uses Didomi for consent.
 // If no banner appears within 5 seconds, it silently moves on.
 async function acceptCookies(driver) {
@@ -214,6 +281,12 @@ async function runOnBrowserStack(capabilities) {
   }
 }
 
+async function runBrowserStackMatrix() {
+  const capabilitiesList = getBrowserStackCapabilitiesList();
+  const runs = await Promise.all(capabilitiesList.map((capabilities) => runOnBrowserStack(capabilities)));
+  return runs.flat();
+}
+
 async function scrapeOpinionArticles(options = {}) {
   let articleData;
   if (options.browserstack && options.capabilities) {
@@ -225,83 +298,38 @@ async function scrapeOpinionArticles(options = {}) {
   return persistArticles(articleData);
 }
 
-async function main() {
-  const useBrowserStack = process.env.USE_BROWSERSTACK === "true";
+async function main(options = {}) {
+  const useBrowserStack =
+    typeof options.runBrowserStack === "boolean"
+      ? options.runBrowserStack
+      : isEnvEnabled(process.env.USE_BROWSERSTACK);
+  const runLocalHeadful =
+    typeof options.runLocalHeadful === "boolean"
+      ? options.runLocalHeadful
+      : !useBrowserStack;
+
+  const jobs = [];
+
   if (
     useBrowserStack &&
     process.env.BROWSERSTACK_USERNAME &&
     process.env.BROWSERSTACK_ACCESS_KEY
   ) {
     console.log("Running on BrowserStack...");
-
-    const capabilitiesList = [
-      {
-        browserName: "Chrome",
-        "bstack:options": {
-          os: "Windows",
-          osVersion: "10",
-          browserVersion: "latest",
-          buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
-          sessionName: "El Pais Scraper - Chrome Desktop",
-          userName: process.env.BROWSERSTACK_USERNAME,
-          accessKey: process.env.BROWSERSTACK_ACCESS_KEY
-        }
-      },
-      {
-        browserName: "Firefox",
-        "bstack:options": {
-          os: "Windows",
-          osVersion: "10",
-          browserVersion: "latest",
-          buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
-          sessionName: "El Pais Scraper - Firefox Desktop",
-          userName: process.env.BROWSERSTACK_USERNAME,
-          accessKey: process.env.BROWSERSTACK_ACCESS_KEY
-        }
-      },
-      {
-        browserName: "Safari",
-        "bstack:options": {
-          os: "OS X",
-          osVersion: "Ventura",
-          browserVersion: "latest",
-          buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
-          sessionName: "El Pais Scraper - Safari Desktop",
-          userName: process.env.BROWSERSTACK_USERNAME,
-          accessKey: process.env.BROWSERSTACK_ACCESS_KEY
-        }
-      },
-      {
-        deviceName: "iPhone 14",
-        browserName: "Safari",
-        "bstack:options": {
-          osVersion: "16",
-          buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
-          sessionName: "El Pais Scraper - Safari Mobile",
-          userName: process.env.BROWSERSTACK_USERNAME,
-          accessKey: process.env.BROWSERSTACK_ACCESS_KEY
-        }
-      },
-      {
-        deviceName: "Google Pixel 7",
-        browserName: "Chrome",
-        "bstack:options": {
-          osVersion: "13.0",
-          buildName: process.env.BROWSERSTACK_BUILD_NAME || "El Pais Scraper Build",
-          sessionName: "El Pais Scraper - Chrome Mobile",
-          userName: process.env.BROWSERSTACK_USERNAME,
-          accessKey: process.env.BROWSERSTACK_ACCESS_KEY
-        }
-      }
-    ];
-
-    const runs = await Promise.all(capabilitiesList.map((cap) => runOnBrowserStack(cap)));
-    const merged = runs.flat();
-    return persistArticles(merged);
+    jobs.push(runBrowserStackMatrix());
   }
 
-  const articleData = await runLocal();
-  return persistArticles(articleData);
+  if (runLocalHeadful) {
+    console.log("Running local headful scraping in parallel...");
+    jobs.push(runLocal());
+  }
+
+  if (!jobs.length) {
+    throw new Error("No scraping mode selected.");
+  }
+
+  const results = await Promise.all(jobs);
+  return persistArticles(results.flat());
 }
 
 if (require.main === module) {
@@ -309,11 +337,14 @@ if (require.main === module) {
 }
 
 module.exports = {
+  getBrowserStackCapabilitiesList,
+  isEnvEnabled,
   scrapeArticles,
   analyzeHeaders,
   persistArticles,
   runLocal,
   runOnBrowserStack,
+  runBrowserStackMatrix,
   scrapeOpinionArticles,
   main
 };

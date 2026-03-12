@@ -14,6 +14,11 @@ const articleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-articleSchema.index({ title: "text", translatedTitle: "text", content: "text", keywords: "text" });
+articleSchema.index({
+  title: "text",
+  translatedTitle: "text",
+  content: "text",
+  keywords: "text"
+});
 
 module.exports = mongoose.model("Article", articleSchema);
