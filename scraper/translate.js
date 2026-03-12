@@ -1,4 +1,4 @@
-﻿async function translateTitles(articleData) {
+async function translateTitles(articleData) {
   const translate = (await import("translate")).default;
 
   for (const article of articleData) {

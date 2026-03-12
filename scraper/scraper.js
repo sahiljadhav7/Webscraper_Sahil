@@ -9,8 +9,42 @@ const Article = require("../database/articleModel");
 const { analyzeSentiment } = require("../analysis/sentiment");
 const { extractKeywords } = require("../analysis/keywordExtraction");
 
+// Tries to click the cookie accept button. El País uses Didomi for consent.
+// If no banner appears within 5 seconds, it silently moves on.
+async function acceptCookies(driver) {
+  const cookieSelectors = [
+    "#didomi-notice-agree-button",
+    "button[id*='accept']",
+    "button[class*='accept']",
+    ".didomi-continue-without-agreeing"
+  ];
+
+  try {
+    for (const selector of cookieSelectors) {
+      try {
+        const btn = await driver.wait(
+          until.elementLocated(By.css(selector)),
+          5000
+        );
+        await driver.wait(until.elementIsVisible(btn), 2000);
+        await btn.click();
+        console.log(`Accepted cookies via: ${selector}`);
+        // Small pause to let the banner dismiss before continuing
+        await driver.sleep(1000);
+        return;
+      } catch (_) {
+        // Try next selector
+      }
+    }
+    console.log("No cookie banner found, continuing...");
+  } catch (_) {
+    console.log("Cookie acceptance skipped.");
+  }
+}
+
 async function scrapeArticles(driver) {
   await driver.get("https://elpais.com/opinion/");
+  await acceptCookies(driver);
   await driver.wait(until.elementLocated(By.css(".c-d")), 10000);
 
   let articles = await driver.findElements(By.css(".c-d"));
@@ -102,9 +136,14 @@ async function persistArticles(articleData) {
 async function runLocal() {
   console.log("Running locally...");
 
+  const options = new chrome.Options();
+  options.setPageLoadStrategy("eager");
+ 
+  options.addArguments("--disable-gpu");
+
   const driver = await new Builder()
     .forBrowser("chrome")
-    .setChromeOptions(new chrome.Options().addArguments("--headless"))
+    .setChromeOptions(options)
     .build();
 
   try {

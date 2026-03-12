@@ -18,7 +18,6 @@ function App() {
           fetchWordFrequency(),
           fetchSentimentDistribution()
         ]);
-
         setArticles(articlesResponse.data || []);
         setWordFrequency(frequencyResponse.data || []);
         setSentimentDistribution(sentimentResponse.data || {});
@@ -28,35 +27,47 @@ function App() {
         setLoading(false);
       }
     }
-
     loadDashboardData();
   }, []);
 
   if (loading) {
-    return <main className="container">Loading dashboard...</main>;
+    return (
+      <main className="container loading-state">
+        <div className="spinner" />
+        <span>Loading dashboard...</span>
+      </main>
+    );
   }
 
   if (error) {
-    return <main className="container error">{error}</main>;
+    return <main className="container error-state">{error}</main>;
   }
 
   return (
     <main className="container">
       <header>
-        <h1>ElPais News Intelligence Platform</h1>
-        <p>Opinion article intelligence across scraping, NLP, and visualization.</p>
+        <div>
+          <h1>ElPais Intelligence</h1>
+          <p>Opinion scraping · NLP · Visualization</p>
+        </div>
+        <div className="header-meta">
+          <span className="badge">{articles.length} articles</span>
+        </div>
       </header>
 
       <ChartsPanel wordFrequency={wordFrequency} sentimentDistribution={sentimentDistribution} />
 
-      <section>
-        <h2>Latest Articles</h2>
+      <div>
+        <div className="section-header">
+          <h2>Latest Articles</h2>
+          <span className="article-count">{articles.length} total</span>
+        </div>
         <div className="cards-grid">
           {articles.map((article) => (
             <ArticleCard key={article._id} article={article} />
           ))}
         </div>
-      </section>
+      </div>
     </main>
   );
 }
